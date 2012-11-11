@@ -193,6 +193,9 @@ int thd72_open(RIG *rig)
     if (ret != RIG_OK)
         return ret;
 
+    rig_debug(RIG_DEBUG_VERBOSE, "%s: letting radio settle\n", __func__);
+    sleep(1);
+
     return RIG_OK;
 }
 
