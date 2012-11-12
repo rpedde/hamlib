@@ -45,5 +45,5 @@ extern int thd72_get_ctcss_sql(RIG *rig, vfo_t vfo, tone_t *tone);
 extern int thd72_set_ctcss_sql(RIG *rig, vfo_t vfo, tone_t tone);
 extern int thd72_get_ctcss_tone(RIG *rig, vfo_t vfo, tone_t *tone);
 extern int thd72_set_ctcss_tone(RIG *rig, vfo_t vfo, tone_t tone);
-
+extern int thd72_get_func(RIG *rig, vfo_t vfo, setting_t func, int *status);
 #endif /* _THD72_H_ */

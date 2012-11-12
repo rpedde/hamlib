@@ -184,7 +184,7 @@ const struct rig_caps thd72a_caps = {
     .get_ctcss_sql = thd72_get_ctcss_sql,
     .set_ctcss_sql = thd72_set_ctcss_sql,
     .get_chan_all_cb = thd72_get_chan_all_cb,
-
+    .get_func = thd72_get_func,
     .get_info =  th_get_info,
 
 };
@@ -646,4 +646,48 @@ int thd72_set_ctcss_tone(RIG *rig, vfo_t vfo, tone_t tone) {
     vo.tone_idx = i;
 
     return thd72_set_fo(rig, vfo, &vo);
+}
+
+int thd72_get_func(RIG *rig, vfo_t vfo, setting_t func, int *status) {
+    thd72_vo_t vo;
+    int retval;
+
+    rig_debug(RIG_DEBUG_TRACE, "%s: called\n", __func__);
+
+    switch(func) {
+    case RIG_FUNC_TONE:
+        retval = thd72_get_fo(rig, vfo, &vo);
+        if (retval != RIG_OK)
+            return retval;
+        *status = vo.tone;
+        break;
+    case RIG_FUNC_TSQL:
+        retval = thd72_get_fo(rig, vfo, &vo);
+        if (retval != RIG_OK)
+            return retval;
+        *status = vo.ct;
+        break;
+    case RIG_FUNC_AIP:
+        /* this is AIP on vhf, AIF on uhf - set through MU */
+        break;
+
+    case RIG_FUNC_ARO:
+        /* this is "auto offset" in MU */
+        break;
+
+    case RIG_FUNC_LOCK:
+        /* this is LK */
+        break;
+
+    case RIG_FUNC_REV:
+        /* this is .reverse in FO */
+        break;
+
+    default:
+        rig_debug(RIG_DEBUG_ERR, "%s: Unsupported function %#x\n",
+                  __func__, func);
+        return -RIG_EINVAL;
+    }
+
+    return -RIG_EINVAL;
 }
