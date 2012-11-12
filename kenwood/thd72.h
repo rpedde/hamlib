@@ -28,9 +28,9 @@ typedef struct thd72_vo_t {
     int ct;
     int dsc;
     int split_tone;
-    int tone_lookup;
-    int ct_lookup;
-    int dsc_lookup;
+    int tone_idx;
+    int ct_idx;
+    int dsc_idx;
     int split_tone_setting; /* 0: off, 1: tone/dcs, 2:dcs/ctc, 3: tone/ctc */
     freq_t offset;
     int mode;
@@ -41,5 +41,9 @@ extern int thd72_get_mode(RIG *rig, vfo_t vfo, rmode_t *mode, pbwidth_t *width);
 extern int thd72_get_freq(RIG *rig, vfo_t vfo, freq_t *freq);
 extern int thd72_set_freq(RIG *rig, vfo_t vfo, freq_t freq);
 extern int thd72_set_mode(RIG *rig, vfo_t vfo, rmode_t mode, pbwidth_t width);
+extern int thd72_get_ctcss_sql(RIG *rig, vfo_t vfo, tone_t *tone);
+extern int thd72_set_ctcss_sql(RIG *rig, vfo_t vfo, tone_t tone);
+extern int thd72_get_ctcss_tone(RIG *rig, vfo_t vfo, tone_t *tone);
+extern int thd72_set_ctcss_tone(RIG *rig, vfo_t vfo, tone_t tone);
 
 #endif /* _THD72_H_ */

@@ -63,6 +63,8 @@
  */
 #define THD72_VFO (RIG_VFO_A|RIG_VFO_B)
 
+#define RIG_TONEMAX 42
+
 static rmode_t td72_mode_table[KENWOOD_MODE_TABLE_MAX] = {
     [0] = RIG_MODE_WFM,
     [1] = RIG_MODE_FM,
@@ -177,6 +179,10 @@ const struct rig_caps thd72a_caps = {
     .get_mode = thd72_get_mode,
     .set_freq = thd72_set_freq,
     .get_freq = thd72_get_freq,
+    .get_ctcss_tone = thd72_get_ctcss_tone,
+    .set_ctcss_tone = thd72_set_ctcss_tone,
+    .get_ctcss_sql = thd72_get_ctcss_sql,
+    .set_ctcss_sql = thd72_set_ctcss_sql,
     .get_chan_all_cb = thd72_get_chan_all_cb,
 
     .get_info =  th_get_info,
@@ -186,6 +192,8 @@ const struct rig_caps thd72a_caps = {
 int thd72_open(RIG *rig)
 {
     int ret;
+
+    rig_set_debug(RIG_DEBUG_TRACE);
 
     kenwood_simple_cmd(rig, "");
 
@@ -405,8 +413,8 @@ int thd72_get_fo(RIG *rig, vfo_t vfo, thd72_vo_t *fo) {
                         &fo->vfo, &fo->freq, &fo->step,
                         &fo->shift, &fo->reverse, &fo->tone,
                         &fo->ct, &fo->dsc, &fo->split_tone,
-                        &fo->tone_lookup, &fo->ct_lookup,
-                        &fo->dsc_lookup, &fo->split_tone_setting,
+                        &fo->tone_idx, &fo->ct_idx,
+                        &fo->dsc_idx, &fo->split_tone_setting,
                         &fo->offset, &fo->mode);
 
     if(retval != 15) {
@@ -435,8 +443,8 @@ int thd72_set_fo(RIG *rig, vfo_t vfo, thd72_vo_t *fo) {
              "%d,%d,%d,%02d,%02d,%03d,%d,%08.0"SCNfreq",%d",
              cmd, fo->freq, fo->step,
              fo->shift, fo->reverse, fo->tone,
-             fo->ct, fo->dsc, fo->split_tone, fo->tone_lookup,
-             fo->ct_lookup, fo->dsc_lookup, fo->split_tone_setting,
+             fo->ct, fo->dsc, fo->split_tone, fo->tone_idx,
+             fo->ct_idx, fo->dsc_idx, fo->split_tone_setting,
              fo->offset, fo->mode);
 
     retval = kenwood_safe_transaction(rig, cmd_buffer, buf, sizeof(buf), 53);
@@ -451,14 +459,16 @@ int thd72_set_fo(RIG *rig, vfo_t vfo, thd72_vo_t *fo) {
                         &fonew.vfo, &fonew.freq, &fonew.step,
                         &fonew.shift, &fonew.reverse, &fonew.tone,
                         &fonew.ct, &fonew.dsc, &fonew.split_tone,
-                        &fonew.tone_lookup, &fonew.ct_lookup,
-                        &fonew.dsc_lookup, &fonew.split_tone_setting,
+                        &fonew.tone_idx,&fonew.ct_idx,
+                        &fonew.dsc_idx, &fonew.split_tone_setting,
                         &fonew.offset, &fonew.mode);
 
     if(retval != 15) {
         rig_debug(RIG_DEBUG_ERR, "%s: Unexpected reply '%s'\n", __func__, buf);
         return -RIG_ERJCTED;
     }
+
+    /* should check wanted and achieved */
 
     return RIG_OK;
 }
@@ -539,5 +549,101 @@ int thd72_set_mode(RIG *rig, vfo_t vfo, rmode_t mode, pbwidth_t width) {
         return retval;
 
     vo.mode = kmode;
+    return thd72_set_fo(rig, vfo, &vo);
+}
+
+int thd72_get_ctcss_sql(RIG *rig, vfo_t vfo, tone_t *tone) {
+    thd72_vo_t vo;
+    int retval;
+    int tone_idx = 0;
+
+    rig_debug(RIG_DEBUG_TRACE, "%s: called\n", __func__);
+    retval = thd72_get_fo(rig, vfo, &vo);
+    if (retval != RIG_OK)
+        return retval;
+
+    tone_idx = vo.ct_idx;
+    if(!vo.ct)
+        tone_idx = 42;
+
+    if(tone_idx <=0 || tone_idx > RIG_TONEMAX) {
+        rig_debug(RIG_DEBUG_ERR, "%s: Unexpected CTCSS tone no (%04d)\n",
+                  __func__, tone_idx);
+        return -RIG_EPROTO;
+    }
+
+    *tone = rig->caps->ctcss_list[tone_idx];
+    return RIG_OK;
+}
+
+int thd72_set_ctcss_sql(RIG *rig, vfo_t vfo, tone_t tone) {
+    thd72_vo_t vo;
+    int retval;
+    int i;
+
+    rig_debug(RIG_DEBUG_TRACE, "%s: called\n", __func__);
+    retval = thd72_get_fo(rig, vfo, &vo);
+    if (retval != RIG_OK)
+        return retval;
+
+    for(i = 0; rig->caps->ctcss_list[i] != 0 && i < RIG_TONEMAX; i++) {
+        if(rig->caps->ctcss_list[i] == tone)
+            break;
+    }
+
+    if(rig->caps->ctcss_list[i] != tone)
+        return -RIG_EINVAL;
+
+    vo.ct = 1;
+    vo.ct_idx = i;
+
+    return thd72_set_fo(rig, vfo, &vo);
+}
+
+int thd72_get_ctcss_tone(RIG *rig, vfo_t vfo, tone_t *tone) {
+    thd72_vo_t vo;
+    int retval;
+    int tone_idx = 0;
+
+    rig_debug(RIG_DEBUG_TRACE, "%s: called\n", __func__);
+    retval = thd72_get_fo(rig, vfo, &vo);
+    if (retval != RIG_OK)
+        return retval;
+
+    tone_idx = vo.tone_idx;
+    if(!vo.tone)
+        tone_idx = 42;
+
+    if(tone_idx <=0 || tone_idx > RIG_TONEMAX) {
+        rig_debug(RIG_DEBUG_ERR, "%s: Unexpected CTCSS tone no (%04d)\n",
+                  __func__, tone_idx);
+        return -RIG_EPROTO;
+    }
+
+    *tone = rig->caps->ctcss_list[tone_idx];
+    return RIG_OK;
+}
+
+int thd72_set_ctcss_tone(RIG *rig, vfo_t vfo, tone_t tone) {
+    thd72_vo_t vo;
+    int retval;
+    int i;
+
+    rig_debug(RIG_DEBUG_TRACE, "%s: called\n", __func__);
+    retval = thd72_get_fo(rig, vfo, &vo);
+    if (retval != RIG_OK)
+        return retval;
+
+    for(i = 0; rig->caps->ctcss_list[i] != 0 && i < RIG_TONEMAX; i++) {
+        if(rig->caps->ctcss_list[i] == tone)
+            break;
+    }
+
+    if(rig->caps->ctcss_list[i] != tone)
+        return -RIG_EINVAL;
+
+    vo.tone = 1;
+    vo.tone_idx = i;
+
     return thd72_set_fo(rig, vfo, &vo);
 }
