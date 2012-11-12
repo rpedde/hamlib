@@ -185,6 +185,7 @@ const struct rig_caps thd72a_caps = {
     .set_ctcss_sql = thd72_set_ctcss_sql,
     .get_chan_all_cb = thd72_get_chan_all_cb,
     .get_func = thd72_get_func,
+    .set_func = thd72_set_func,
     .get_info =  th_get_info,
 
 };
@@ -648,7 +649,35 @@ int thd72_set_ctcss_tone(RIG *rig, vfo_t vfo, tone_t tone) {
     return thd72_set_fo(rig, vfo, &vo);
 }
 
-int thd72_get_func(RIG *rig, vfo_t vfo, setting_t func, int *status) {
+int thd72_set_lock(RIG *rig, int status) {
+    char buf[8];
+
+    rig_debug(RIG_DEBUG_TRACE, "%s: called\n", __func__);
+
+    sprintf(buf, "LK %d,0", status);
+
+    return kenwood_cmd(rig, buf);
+}
+
+int thd72_get_lock(RIG *rig, int *status) {
+    char buf[8];
+    int retval;
+
+    rig_debug(RIG_DEBUG_TRACE, "%s: called\n", __func__);
+
+    sprintf(buf, "LK");
+
+    retval = kenwood_safe_transaction(rig, buf, buf, sizeof(buf), 7);
+    if (retval != RIG_OK)
+        return retval;
+
+    if (status)
+        *status = (buf[3] == '0') ? 0 : 1;
+
+    return RIG_OK;
+}
+
+int thd72_set_func(RIG *rig, vfo_t vfo, setting_t func, int status) {
     thd72_vo_t vo;
     int retval;
 
@@ -659,14 +688,16 @@ int thd72_get_func(RIG *rig, vfo_t vfo, setting_t func, int *status) {
         retval = thd72_get_fo(rig, vfo, &vo);
         if (retval != RIG_OK)
             return retval;
-        *status = vo.tone;
-        break;
+        vo.tone = status;
+        return thd72_set_fo(rig, vfo, &vo);
+
     case RIG_FUNC_TSQL:
         retval = thd72_get_fo(rig, vfo, &vo);
         if (retval != RIG_OK)
             return retval;
-        *status = vo.ct;
-        break;
+        vo.ct = status;
+        return thd72_set_fo(rig, vfo, &vo);
+
     case RIG_FUNC_AIP:
         /* this is AIP on vhf, AIF on uhf - set through MU */
         break;
@@ -676,12 +707,56 @@ int thd72_get_func(RIG *rig, vfo_t vfo, setting_t func, int *status) {
         break;
 
     case RIG_FUNC_LOCK:
-        /* this is LK */
-        break;
+        return thd72_set_lock(rig, status);
 
     case RIG_FUNC_REV:
-        /* this is .reverse in FO */
+        retval = thd72_get_fo(rig, vfo, &vo);
+        if (retval != RIG_OK)
+            return retval;
+        vo.reverse = status;
+        return thd72_set_fo(rig, vfo, &vo);
+
+    default:
+        rig_debug(RIG_DEBUG_ERR, "%s: Unsupported function %#x\n", __func__, func);
+        return -RIG_EINVAL;
+    }
+
+    return -RIG_EINVAL;
+}
+
+int thd72_get_func(RIG *rig, vfo_t vfo, setting_t func, int *status) {
+    thd72_vo_t vo;
+    int retval;
+
+    rig_debug(RIG_DEBUG_TRACE, "%s: called\n", __func__);
+
+    switch(func) {
+    case RIG_FUNC_TONE:
+        retval = thd72_get_fo(rig, vfo, &vo);
+        *status = vo.tone;
+        return retval;
+
+    case RIG_FUNC_TSQL:
+        retval = thd72_get_fo(rig, vfo, &vo);
+        *status = vo.ct;
+        return retval;
+
+    case RIG_FUNC_AIP:
+        /* this is AIP on vhf, AIF on uhf - set through MU */
         break;
+
+    case RIG_FUNC_ARO:
+        /* this is "auto offset" in MU */
+        break;
+
+    case RIG_FUNC_LOCK:
+        retval = thd72_get_lock(rig, status);
+        return retval;
+
+    case RIG_FUNC_REV:
+        retval = thd72_get_fo(rig, vfo, &vo);
+        *status = vo.reverse;
+        return retval;
 
     default:
         rig_debug(RIG_DEBUG_ERR, "%s: Unsupported function %#x\n",
